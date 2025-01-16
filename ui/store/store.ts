@@ -3,7 +3,8 @@ import { configureStore as baseConfigureStore } from '@reduxjs/toolkit';
 import devtoolsEnhancer from 'remote-redux-devtools';
 import rootReducer from '../ducks';
 import { AppSliceState } from '../ducks/app/app';
-import { MetaMaskSliceState } from '../ducks/metamask/metamask';
+import { BackgroundSliceState } from '../ducks/background/background';
+import { BackgroundStateProxy } from '../../shared/types/background';
 
 /**
  * This interface is temporary and is copied from the message-manager.js file
@@ -34,6 +35,60 @@ export type MessagesIndexedById = {
 
 type RootReducerReturnType = ReturnType<typeof rootReducer>;
 
+type _$toIntersection2<T> = (
+  T extends unknown ? (x: T) => unknown : never
+) extends (x: infer X) => void
+  ? X
+  : never;
+
+type _$toIntersection<T> = boolean extends T
+  ? boolean & _$toIntersection2<Exclude<T, boolean>>
+  : _$toIntersection2<T>;
+
+type _$toList<T, O extends unknown[] = []> = _$toIntersection<
+  T extends unknown ? (t: T) => T : never
+> extends (x: never) => infer X
+  ? _$toList<Exclude<T, X>, [X, ...O]>
+  : O;
+
+export type _$cast<T, U> = [T] extends [U] ? T : U;
+
+export type _$keys<T extends Record<string, unknown>> = _$toList<keyof T>;
+
+type _PrependKeyToEntries<K extends PropertyKey, E extends unknown[][]> = {
+  [I in keyof E]: E[I] extends unknown[] ? [K, ...E[I]] : never;
+};
+
+type _DeepEntriesKey<
+  O extends Record<PropertyKey, unknown>,
+  K extends PropertyKey,
+> = O[K] extends Record<PropertyKey, unknown>
+  ? _PrependKeyToEntries<K, _$deepEntries<O[K]>>
+  : [[K, O[K]]];
+
+export type _$deepEntries<
+  O extends Record<PropertyKey, unknown>,
+  Keys extends unknown[] = _$keys<O>,
+  Acc extends unknown[][] = [],
+  DEEP_KEYS = _DeepEntriesKey<O, _$cast<Keys[0], PropertyKey>>,
+> = Keys extends [infer K, ...infer Rest]
+  ? K extends keyof O
+    ? _$deepEntries<O, Rest, [...Acc, ..._$cast<DEEP_KEYS, unknown[][]>]>
+    : never
+  : Acc;
+
+type _$display<T extends Record<PropertyKey, unknown>> = {
+  [key in keyof T]: T[key];
+};
+
+export type _ = _DeepEntriesKey<
+  _$display<BackgroundStateProxy>,
+  keyof _$display<BackgroundStateProxy>
+>;
+
+type FlattenedBackgroundStateProxy =
+  FlattenObjectOneLevel<BackgroundStateProxy>;
+
 /**
  * `ReduxState` overrides incorrectly typed properties of `RootReducerReturnType`, and is only intended to be used as an input for `configureStore`.
  * The `MetaMaskReduxState` type (derived from the returned output of `configureStore`) is to be used consistently as the single source-of-truth and representation of Redux state shape.
@@ -45,7 +100,8 @@ type ReduxState = {
   activeTab: {
     origin: string;
   };
-  metamask: MetaMaskSliceState['metamask'];
+  metamask: FlattenedBackgroundStateProxy;
+  background: BackgroundSliceState['background'];
   appState: AppSliceState['appState'];
 } & Omit<RootReducerReturnType, 'activeTab' | 'metamask' | 'appState'>;
 

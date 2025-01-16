@@ -68,6 +68,7 @@ import {
   getInternalAccountByAddress,
   getSelectedInternalAccount,
   getInternalAccounts,
+  oldestPendingConfirmationSelector,
 } from '../selectors';
 import {
   getSelectedNetworkClientId,
@@ -119,7 +120,7 @@ import {
 import { ThemeType } from '../../shared/constants/preferences';
 import { FirstTimeFlowType } from '../../shared/constants/onboarding';
 import { getMethodDataAsync } from '../../shared/lib/four-byte';
-import { BackgroundStateProxy } from '../../shared/types/metamask';
+import { BackgroundStateProxy } from '../../shared/types/background';
 import { DecodedTransactionDataResponse } from '../../shared/types/transaction-decode';
 import { LastInteractedConfirmationInfo } from '../pages/confirmations/types/confirm';
 import { EndTraceRequest } from '../../shared/lib/trace';
@@ -1615,7 +1616,124 @@ export function updateMetamaskState(
       return currentState;
     }
 
-    const newState = applyPatches<BackgroundStateProxy>(currentState, patches);
+    const newState = applyPatches<Record<string, unknown>>(
+      currentState,
+      patches,
+      true,
+    );
+    const { currentLocale } = currentState;
+    const currentInternalAccount = getSelectedInternalAccount(state);
+    const selectedAddress = currentInternalAccount?.address;
+    const { currentLocale: newLocale } = newState;
+    const newProviderConfig = getProviderConfig({ metamask: newState });
+    const newInternalAccount = getSelectedInternalAccount({
+      metamask: newState,
+    });
+    const newSelectedAddress = newInternalAccount?.address;
+
+    if (currentLocale && newLocale && currentLocale !== newLocale) {
+      dispatch(updateCurrentLocale(newLocale));
+    }
+
+    if (selectedAddress !== newSelectedAddress) {
+      dispatch({ type: actionConstants.SELECTED_ADDRESS_CHANGED });
+    }
+
+    const newAddressBook =
+      newState.addressBook?.[newProviderConfig?.chainId] ?? {};
+    const oldAddressBook =
+      currentState.addressBook?.[providerConfig?.chainId] ?? {};
+    // TODO: Replace `any` with type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newAccounts: { [address: string]: Record<string, any> } =
+      getMetaMaskAccounts({ metamask: newState });
+    // TODO: Replace `any` with type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const oldAccounts: { [address: string]: Record<string, any> } =
+      getMetaMaskAccounts({ metamask: currentState });
+    const newSelectedAccount = newAccounts[newSelectedAddress];
+    const oldSelectedAccount = newAccounts[selectedAddress];
+    // dispatch an ACCOUNT_CHANGED for any account whose balance or other
+    // properties changed in this update
+    Object.entries(oldAccounts).forEach(([address, oldAccount]) => {
+      if (!isEqual(oldAccount, newAccounts[address])) {
+        dispatch({
+          type: actionConstants.ACCOUNT_CHANGED,
+          payload: { account: newAccounts[address] },
+        });
+      }
+    });
+
+    // Also emit an event for the selected account changing, either due to a
+    // property update or if the entire account changes.
+    if (isEqual(oldSelectedAccount, newSelectedAccount) === false) {
+      dispatch({
+        type: actionConstants.SELECTED_ACCOUNT_CHANGED,
+        payload: { account: newSelectedAccount },
+      });
+    }
+    // We need to keep track of changing address book entries
+    if (isEqual(oldAddressBook, newAddressBook) === false) {
+      dispatch({
+        type: actionConstants.ADDRESS_BOOK_UPDATED,
+        payload: { addressBook: newAddressBook },
+      });
+    }
+
+    // track when gasFeeEstimates change
+    if (
+      isEqual(currentState.gasFeeEstimates, newState.gasFeeEstimates) === false
+    ) {
+      dispatch({
+        type: actionConstants.GAS_FEE_ESTIMATES_UPDATED,
+        payload: {
+          gasFeeEstimates: newState.gasFeeEstimates,
+          gasEstimateType: newState.gasEstimateType,
+        },
+      });
+    }
+    dispatch({
+      type: actionConstants.UPDATE_METAMASK_STATE,
+      value: newState,
+    });
+    if (providerConfig.chainId !== newProviderConfig.chainId) {
+      dispatch({
+        type: actionConstants.CHAIN_CHANGED,
+        payload: newProviderConfig.chainId,
+      });
+      // We dispatch this action to ensure that the send state stays up to date
+      // after the chain changes. This async thunk will fail gracefully in the
+      // event that we are not yet on the send flow with a draftTransaction in
+      // progress.
+
+      dispatch(initializeSendState({ chainHasChanged: true }));
+    }
+
+    ///: BEGIN:ONLY_INCLUDE_IF(build-mmi)
+    updateCustodyState(dispatch, newState, getState());
+    ///: END:ONLY_INCLUDE_IF
+
+    return newState;
+  };
+}
+
+export function updateBackgroundState(
+  patches: Patch[],
+): ThunkAction<void, MetaMaskReduxState, unknown, AnyAction> {
+  return (dispatch, getState) => {
+    const state = getState();
+    const providerConfig = getProviderConfig(state);
+    const { metamask: currentState } = state;
+
+    if (!patches?.length) {
+      return currentState;
+    }
+
+    const newState = applyPatches<BackgroundStateProxy>(
+      currentState,
+      patches,
+      true,
+    );
     const {
       PreferencesController: { currentLocale },
     } = currentState;
@@ -6087,6 +6205,8 @@ export async function endBackgroundTrace(request: EndTraceRequest) {
  *
  * @param oldState - The current state.
  * @param patches - The patches to apply.
+ * @param isFlattened - 'false' if the input state object is keyed by controller name.
+ * 'true' if it has been flattened so that controller state properties are at the top level.
  * Only supports 'replace' operations with at most 2 path elements.
  * Properties that are nested at deeper levels cannot be updated in isolation.
  * @returns The new state.
@@ -6094,6 +6214,7 @@ export async function endBackgroundTrace(request: EndTraceRequest) {
 function applyPatches<State extends Record<string, unknown>>(
   oldState: State,
   patches: Patch[],
+  isFlattened: boolean = false,
 ): State {
   const newState = { ...oldState };
 
@@ -6101,13 +6222,13 @@ function applyPatches<State extends Record<string, unknown>>(
     const { op, path, value } = patch;
 
     if (op === 'replace') {
-      if (path.length === 2) {
+      if (!isFlattened && path.length === 2) {
         const [controllerKey, key] = path;
         if (!(controllerKey in newState)) {
           newState[controllerKey] = {};
         }
         newState[controllerKey][key] = value;
-      } else if (path.length === 1) {
+      } else if (isFlattened || path.length === 1) {
         newState[path[0]] = value;
       }
     } else {
