@@ -54,6 +54,7 @@ import {
   type SnapAndHardwareMessenger,
 } from '../snap-keyring/metrics';
 import { shouldUseRedesignForTransactions } from '../../../../shared/lib/confirmation.utils';
+import { HardwareKeyringType } from '../../../../shared/constants/hardware-wallets';
 
 export type TransactionMetricsRequest = {
   createEventFragment: (
@@ -78,6 +79,7 @@ export type TransactionMetricsRequest = {
   getDeviceModel: (
     address: string,
   ) => Promise<'ledger' | 'lattice' | 'N/A' | string>;
+  getHardwareTypeForMetric: (address: string) => Promise<HardwareKeyringType>;
   // According to the type GasFeeState returned from getEIP1559GasFeeEstimates
   // doesn't include some properties used in buildEventFragmentProperties,
   // hence returning any here to avoid type errors.
@@ -1044,6 +1046,7 @@ async function buildEventFragmentProperties({
     getSwapAndSendMetricsProps(transactionMeta);
 
   /** The transaction status property is not considered sensitive and is now included in the non-anonymous event */
+
   let properties = {
     chain_id: chainId,
     referrer,
@@ -1080,6 +1083,7 @@ async function buildEventFragmentProperties({
   const snapAndHardwareInfo = await getSnapAndHardwareInfoForMetrics(
     transactionMetricsRequest.getAccountType,
     transactionMetricsRequest.getDeviceModel,
+    transactionMetricsRequest.getHardwareTypeForMetric,
     transactionMetricsRequest.snapAndHardwareMessenger,
   );
   Object.assign(properties, snapAndHardwareInfo);

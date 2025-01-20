@@ -195,6 +195,7 @@ function finalizeSignatureFragment(
  *  that should be tracked for methods rate limited by random sample.
  * @param {Function} opts.getAccountType
  * @param {Function} opts.getDeviceModel
+ * @param {Function} opts.getHardwareTypeForMetric
  * @param {Function} opts.isConfirmationRedesignEnabled
  * @param {Function} opts.isRedesignedConfirmationsDeveloperEnabled
  * @param {RestrictedControllerMessenger} opts.snapAndHardwareMessenger
@@ -214,6 +215,7 @@ export default function createRPCMethodTrackingMiddleware({
   globalRateLimitMaxAmount = 10, // max of events in the globalRateLimitTimeout window. pass 0 for no global rate limit
   getAccountType,
   getDeviceModel,
+  getHardwareTypeForMetric,
   isConfirmationRedesignEnabled,
   isRedesignedConfirmationsDeveloperEnabled,
   snapAndHardwareMessenger,
@@ -335,6 +337,7 @@ export default function createRPCMethodTrackingMiddleware({
         const snapAndHardwareInfo = await getSnapAndHardwareInfoForMetrics(
           getAccountType,
           getDeviceModel,
+          getHardwareTypeForMetric,
           snapAndHardwareMessenger,
         );
 
