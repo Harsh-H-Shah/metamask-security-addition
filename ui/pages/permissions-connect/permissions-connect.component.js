@@ -283,8 +283,7 @@ export default class PermissionConnect extends Component {
         ) : (
           <PermissionConnectHeader
             requestId={permissionsRequestId}
-            origin={targetSubjectMetadata.origin}
-            iconUrl={targetSubjectMetadata.iconUrl}
+            subjectMetadata={targetSubjectMetadata}
           />
         )}
       </Box>

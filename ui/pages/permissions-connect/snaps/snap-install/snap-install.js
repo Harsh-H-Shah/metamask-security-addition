@@ -31,7 +31,6 @@ import {
 import SnapPermissionsList from '../../../../components/app/snaps/snap-permissions-list';
 import { useScrollRequired } from '../../../../hooks/useScrollRequired';
 import InstallError from '../../../../components/app/snaps/install-error/install-error';
-import { useOriginMetadata } from '../../../../hooks/useOriginMetadata';
 import { getSnapMetadata, getSnapsMetadata } from '../../../../selectors';
 import { getSnapName } from '../../../../helpers/utils/util';
 import PermissionConnectHeader from '../../../../components/app/permission-connect-header';
@@ -44,8 +43,7 @@ export default function SnapInstall({
   targetSubjectMetadata,
 }) {
   const t = useI18nContext();
-  const siteMetadata = useOriginMetadata(request?.metadata?.dappOrigin) || {};
-  const { origin, iconUrl } = siteMetadata;
+
   const [isShowingWarning, setIsShowingWarning] = useState(false);
   const snapsMetadata = useSelector(getSnapsMetadata);
   const [showAllPermissions, setShowAllPermissions] = useState(false);
@@ -116,7 +114,7 @@ export default function SnapInstall({
       backgroundColor={BackgroundColor.backgroundAlternative}
     >
       {(isLoading || hasError) && !isOriginSnap ? (
-        <PermissionConnectHeader origin={origin} iconUrl={iconUrl} />
+        <PermissionConnectHeader subjectMetadata={targetSubjectMetadata} />
       ) : (
         <SnapAuthorshipHeader
           snapId={

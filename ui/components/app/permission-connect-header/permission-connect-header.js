@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   AlignItems,
@@ -21,18 +21,19 @@ import {
 import { getAvatarFallbackLetter } from '../../../helpers/utils/util';
 import { Nav } from '../../../pages/confirmations/components/confirm/nav';
 
-const PermissionConnectHeader = ({ requestId, origin, iconUrl }) => {
-  const transformOriginToTitle = (rawOrigin) => {
-    try {
-      const url = new URL(rawOrigin);
-      const parts = url.hostname.split('.');
-      return parts.slice(-2).join('.');
-    } catch (e) {
-      return 'Unknown Origin';
-    }
-  };
-  const title = transformOriginToTitle(origin);
+const PermissionConnectHeader = ({ requestId, subjectMetadata }) => {
+  const [cachedSubjectMetadata, setCachedSubjectMetadata] =
+    useState(subjectMetadata);
 
+  // While this redirecting screen is showing, the subject metadata will become invalidated
+  // for that reason we cache the last seen valid subject metadata and show that.
+  useEffect(() => {
+    if (subjectMetadata && subjectMetadata.origin) {
+      setCachedSubjectMetadata(subjectMetadata);
+    }
+  }, [subjectMetadata]);
+
+  const { iconUrl, origin, name } = cachedSubjectMetadata;
   return (
     <>
       <Nav confirmationId={requestId} />
@@ -52,7 +53,7 @@ const PermissionConnectHeader = ({ requestId, origin, iconUrl }) => {
               backgroundColor={BackgroundColor.backgroundAlternative}
               size={IconSize.Lg}
               src={iconUrl}
-              name={title}
+              name={name || origin}
             />
           ) : (
             <AvatarBase
@@ -64,7 +65,7 @@ const PermissionConnectHeader = ({ requestId, origin, iconUrl }) => {
               style={{ borderWidth: '0px' }}
               backgroundColor={BackgroundColor.backgroundAlternative}
             >
-              {getAvatarFallbackLetter(title)}
+              {getAvatarFallbackLetter(name || origin)}
             </AvatarBase>
           )}
         </Box>
@@ -76,7 +77,7 @@ const PermissionConnectHeader = ({ requestId, origin, iconUrl }) => {
           style={{ overflow: 'hidden' }}
         >
           <Text ellipsis fontWeight={FontWeight.Medium}>
-            {title}
+            {origin}
           </Text>
           <Text
             ellipsis
@@ -93,8 +94,11 @@ const PermissionConnectHeader = ({ requestId, origin, iconUrl }) => {
 
 PermissionConnectHeader.propTypes = {
   requestId: PropTypes.string,
-  origin: PropTypes.string,
-  iconUrl: PropTypes.string,
+  subjectMetadata: {
+    origin: PropTypes.string,
+    iconUrl: PropTypes.string,
+    name: PropTypes.string,
+  },
 };
 
 export default PermissionConnectHeader;
