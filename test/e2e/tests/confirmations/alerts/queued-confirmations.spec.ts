@@ -30,10 +30,6 @@ const PORT_ONE = 7777;
 const CHAIN_ID_ONE = 1000;
 
 describe('Queued Confirmations', function () {
-  if (!process.env.ENABLE_CONFIRMATION_REDESIGN) {
-    return;
-  }
-
   describe('Queued Requests Banner Alert', function () {
     it('Banner is shown on dApp 1, but not on dApp 2 after adding transaction on dApp 1, and one on dApp 2 (old confirmation flow)', async function () {
       await withFixtures(
