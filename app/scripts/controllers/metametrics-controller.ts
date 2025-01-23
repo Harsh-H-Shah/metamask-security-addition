@@ -205,6 +205,10 @@ const controllerMetadata = {
     persist: true,
     anonymous: false,
   },
+  userTraitsBeforeMetricsOptIn: {
+    persist: true,
+    anonymous: false,
+  },
   traits: {
     persist: true,
     anonymous: false,
@@ -248,6 +252,7 @@ export type MetaMetricsControllerState = {
   latestNonAnonymousEventTimestamp: number;
   fragments: Record<string, MetaMetricsEventFragment>;
   eventsBeforeMetricsOptIn: MetaMetricsEventPayload[];
+  userTraitsBeforeMetricsOptIn: MetaMetricsUserTraits[];
   traits: MetaMetricsUserTraits;
   previousUserTraits?: MetaMetricsUserTraits;
   dataCollectionForMarketing: boolean | null;
@@ -335,6 +340,7 @@ export const getDefaultMetaMetricsControllerState =
     marketingCampaignCookieId: null,
     latestNonAnonymousEventTimestamp: 0,
     eventsBeforeMetricsOptIn: [],
+    userTraitsBeforeMetricsOptIn: [],
     traits: {},
     previousUserTraits: {},
     fragments: {},
@@ -754,6 +760,11 @@ export default class MetaMetricsController extends BaseController<
   identify(userTraits: Partial<MetaMetricsUserTraits>): void {
     const { metaMetricsId, participateInMetaMetrics } = this.state;
 
+    if (participateInMetaMetrics === null && metaMetricsId === null ) {
+      this.addUserTraitsBeforeMetricsOptIn(userTraits);
+      return;
+    }
+
     if (!participateInMetaMetrics || !metaMetricsId || !userTraits) {
       return;
     }
@@ -820,6 +831,7 @@ export default class MetaMetricsController extends BaseController<
 
     if (participateInMetaMetrics) {
       this.trackEventsAfterMetricsOptIn();
+      this.trackUserTraitsAfterMetricsOptIn();
       this.clearEventsAfterMetricsOptIn();
     } else if (this.state.marketingCampaignCookieId) {
       this.setMarketingCampaignCookieId(null);
@@ -1019,6 +1031,13 @@ export default class MetaMetricsController extends BaseController<
     });
   }
 
+  trackUserTraitsAfterMetricsOptIn(): void {
+    const { userTraitsBeforeMetricsOptIn } = this.state;
+    userTraitsBeforeMetricsOptIn.forEach((userTraitBeforeMetricsOptIn) => {
+      this.#identify(userTraitBeforeMetricsOptIn);
+    });
+  }
+
   // Once we track queued events after a user opts into metrics, we want to clear the event queue.
   clearEventsAfterMetricsOptIn(): void {
     this.update((state) => {
@@ -1030,6 +1049,12 @@ export default class MetaMetricsController extends BaseController<
   addEventBeforeMetricsOptIn(event: MetaMetricsEventPayload): void {
     this.update((state) => {
       state.eventsBeforeMetricsOptIn.push(event);
+    });
+  }
+
+  addUserTraitsBeforeMetricsOptIn(userTraits: MetaMetricsUserTraits): void {
+    this.update((state) => {
+      state.userTraitsBeforeMetricsOptIn.push(userTraits);
     });
   }
 
