@@ -160,6 +160,7 @@ export type PreferencesControllerState = Omit<
   isMultiAccountBalancesEnabled: boolean;
   useMultiAccountBalanceChecker: boolean;
   usePhishDetect: boolean;
+  useAddressPoisoningDetect: boolean;
   referrals: {
     hyperliquid: Record<Hex, ReferralStatus>;
   };
@@ -247,6 +248,7 @@ export const getDefaultPreferencesControllerState =
     useMultiAccountBalanceChecker: true,
     useNftDetection: true,
     usePhishDetect: true,
+    useAddressPoisoningDetect: true,
     useSafeChainsListValidation: true,
     // set to true means the dynamic list from the API is being used
     // set to false will be using the static list from contract-metadata
@@ -465,6 +467,12 @@ const controllerMetadata: StateMetadata<PreferencesControllerState> = {
     includeInDebugSnapshot: true,
     usedInUi: true,
   },
+  useAddressPoisoningDetect: {
+    includeInStateLogs: true,
+    persist: true,
+    includeInDebugSnapshot: true,
+    usedInUi: true,
+  },
   useSafeChainsListValidation: {
     includeInStateLogs: true,
     persist: true,
@@ -574,6 +582,17 @@ export class PreferencesController extends BaseController<
   setUsePhishDetect(val: boolean): void {
     this.update((state) => {
       state.usePhishDetect = val;
+    });
+  }
+
+  /**
+   * Setter for the `useAddressPoisoningDetect` property
+   *
+   * @param val - Whether or not the user prefers address poisoning detection
+   */
+  setUseAddressPoisoningDetect(val: boolean): void {
+    this.update((state) => {
+      state.useAddressPoisoningDetect = val;
     });
   }
 

@@ -12,6 +12,7 @@ import {
   setUseCurrencyRateCheck,
   setUseMultiAccountBalanceChecker,
   setUsePhishDetect,
+  setUseAddressPoisoningDetect,
   setUseTokenDetection,
   toggleExternalServices,
   setUseAddressBarEnsResolution,
@@ -49,6 +50,7 @@ const mapStateToProps = (state) => {
 
   const {
     usePhishDetect,
+    useAddressPoisoningDetect,
     useTokenDetection,
     ipfsGateway,
     useMultiAccountBalanceChecker,
@@ -85,6 +87,7 @@ const mapStateToProps = (state) => {
     participateInMetaMetrics: getParticipateInMetaMetrics(state),
     dataCollectionForMarketing: getDataCollectionForMarketing(state),
     usePhishDetect,
+    useAddressPoisoningDetect,
     useTokenDetection,
     hasActiveShieldSubscription,
     ipfsGateway,
@@ -115,6 +118,8 @@ const mapDispatchToProps = (dispatch) => {
     setDataCollectionForMarketing: (val) =>
       dispatch(setDataCollectionForMarketing(val)),
     setUsePhishDetect: (val) => dispatch(setUsePhishDetect(val)),
+    setUseAddressPoisoningDetect: (val) =>
+      dispatch(setUseAddressPoisoningDetect(val)),
     setUseCurrencyRateCheck: (val) => dispatch(setUseCurrencyRateCheck(val)),
     setUseTokenDetection: (val) => dispatch(setUseTokenDetection(val)),
     setIpfsGateway: (val) => dispatch(setIpfsGateway(val)),

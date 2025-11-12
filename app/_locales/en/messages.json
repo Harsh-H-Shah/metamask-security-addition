@@ -7910,6 +7910,12 @@
   "use4ByteResolution": {
     "message": "Decode smart contracts"
   },
+  "useAddressPoisoningDetection": {
+    "message": "Use address poisoning detection"
+  },
+  "useAddressPoisoningDetectionDescription": {
+    "message": "Display a warning when sending to addresses that may be address poisoning attempts"
+  },
   "useDifferentLoginMethod": {
     "message": "Use a different login method"
   },

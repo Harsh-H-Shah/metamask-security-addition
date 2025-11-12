@@ -83,6 +83,8 @@ export default class SecurityTab extends PureComponent {
     setParticipateInMetaMetrics: PropTypes.func.isRequired,
     setUsePhishDetect: PropTypes.func.isRequired,
     usePhishDetect: PropTypes.bool.isRequired,
+    setUseAddressPoisoningDetect: PropTypes.func.isRequired,
+    useAddressPoisoningDetect: PropTypes.bool.isRequired,
     setUse4ByteResolution: PropTypes.func.isRequired,
     use4ByteResolution: PropTypes.bool.isRequired,
     useTokenDetection: PropTypes.bool.isRequired,
@@ -427,6 +429,48 @@ export default class SecurityTab extends PureComponent {
             value={usePhishDetect}
             onToggle={(value) => {
               setUsePhishDetect(!value);
+            }}
+            offLabel={t('off')}
+            onLabel={t('on')}
+            disabled={hasActiveShieldSubscription}
+          />
+        </div>
+      </Box>
+    );
+  }
+
+  renderAddressPoisoningDetectionToggle() {
+    const { t } = this.context;
+    const {
+      useAddressPoisoningDetect,
+      setUseAddressPoisoningDetect,
+      hasActiveShieldSubscription,
+    } = this.props;
+
+    return (
+      <Box
+        ref={this.settingsRefs[5]}
+        className="settings-page__content-row"
+        display={Display.Flex}
+        flexDirection={FlexDirection.Row}
+        justifyContent={JustifyContent.spaceBetween}
+        gap={4}
+      >
+        <div className="settings-page__content-item">
+          <span>{t('useAddressPoisoningDetection')}</span>
+          <div className="settings-page__content-description">
+            {t('useAddressPoisoningDetectionDescription')}
+          </div>
+        </div>
+
+        <div
+          className="settings-page__content-item-col"
+          data-testid="useAddressPoisoningDetection"
+        >
+          <ToggleButton
+            value={useAddressPoisoningDetect}
+            onToggle={(value) => {
+              setUseAddressPoisoningDetect(!value);
             }}
             offLabel={t('off')}
             onLabel={t('on')}
@@ -1347,6 +1391,9 @@ export default class SecurityTab extends PureComponent {
         </div>
         <div className="settings-page__content-padded">
           {this.renderPhishingDetectionToggle()}
+        </div>
+        <div className="settings-page__content-padded">
+          {this.renderAddressPoisoningDetectionToggle()}
         </div>
         <div className="settings-page__content-padded">
           {this.renderSkipDeepLinkInterstitial()}

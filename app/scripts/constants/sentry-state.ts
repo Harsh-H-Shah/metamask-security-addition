@@ -261,6 +261,7 @@ export const SENTRY_BACKGROUND_STATE = {
     useMultiAccountBalanceChecker: true,
     useNftDetection: true,
     usePhishDetect: true,
+    useAddressPoisoningDetect: true,
     useTokenDetection: true,
     useTransactionSimulations: true,
     enableMV3TimestampSave: true,

@@ -4597,6 +4597,21 @@ export function setUsePhishDetect(
   };
 }
 
+export function setUseAddressPoisoningDetect(
+  val: boolean,
+): ThunkAction<void, MetaMaskReduxState, unknown, AnyAction> {
+  return (dispatch: MetaMaskReduxDispatch) => {
+    dispatch(showLoadingIndication());
+    log.debug(`background.setUseAddressPoisoningDetect`);
+    callBackgroundMethod('setUseAddressPoisoningDetect', [val], (err) => {
+      dispatch(hideLoadingIndication());
+      if (err) {
+        dispatch(displayWarning(err));
+      }
+    });
+  };
+}
+
 export function setUseMultiAccountBalanceChecker(
   val: boolean,
 ): ThunkAction<void, MetaMaskReduxState, unknown, AnyAction> {

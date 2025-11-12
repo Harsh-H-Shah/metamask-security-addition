@@ -2277,6 +2277,10 @@ export default class MetamaskController extends EventEmitter {
       setUsePhishDetect: preferencesController.setUsePhishDetect.bind(
         preferencesController,
       ),
+      setUseAddressPoisoningDetect:
+        preferencesController.setUseAddressPoisoningDetect.bind(
+          preferencesController,
+        ),
       setUseMultiAccountBalanceChecker:
         preferencesController.setUseMultiAccountBalanceChecker.bind(
           preferencesController,

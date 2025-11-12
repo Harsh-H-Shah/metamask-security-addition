@@ -19,6 +19,7 @@ import {
   TextVariant,
 } from '../../../../../helpers/constants/design-system';
 import { useI18nContext } from '../../../../../hooks/useI18nContext';
+import { useAddressPoisoningDetection } from '../../../../../hooks/useAddressPoisoningDetection';
 import { useRecipientSelectionMetrics } from '../../../hooks/send/metrics/useRecipientSelectionMetrics';
 import { useRecipientValidation } from '../../../hooks/send/useRecipientValidation';
 import { useSendContext } from '../../../context/send';
@@ -39,6 +40,7 @@ export const Recipient = ({
     resolutionProtocol,
   } = recipientValidationResult;
   const t = useI18nContext();
+  const checkAddressPoison = useAddressPoisoningDetection();
   const [isRecipientModalOpen, setIsRecipientModalOpen] = useState(false);
   const { to, updateTo, updateToResolved } = useSendContext();
   const {
@@ -47,6 +49,15 @@ export const Recipient = ({
   } = useRecipientSelectionMetrics();
   const recipients = useRecipients();
   const recipientInputRef = useRef<HTMLInputElement>(null);
+
+  // Check for address poisoning when recipient changes
+  useEffect(() => {
+    if (to && toAddressValidated) {
+      console.log('[Recipient] Checking for address poisoning:', to);
+      checkAddressPoison(to);
+    }
+  }, [to, toAddressValidated, checkAddressPoison]);
+
   const closeRecipientModal = useCallback(() => {
     setIsRecipientModalOpen(false);
   }, []);
