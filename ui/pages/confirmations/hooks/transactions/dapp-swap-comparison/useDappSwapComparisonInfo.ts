@@ -30,11 +30,12 @@ export function useDappSwapComparisonInfo() {
     id: transactionId,
     simulationData,
     txParams,
+    txParamsOriginal,
     nestedTransactions,
   } = currentConfirmation ?? {
     txParams: {},
   };
-  const { data, gas } = txParams ?? {};
+  const { data, gas } = txParamsOriginal ?? txParams ?? {};
   const { updateTransactionEventFragment } = useTransactionEventFragment();
   const {
     requestDetectionLatency,
@@ -62,7 +63,7 @@ export function useDappSwapComparisonInfo() {
     [transactionId, updateTransactionEventFragment],
   );
 
-  const { quotesInput, amountMin, tokenAddresses } = useMemo(() => {
+  const { commands, quotesInput, amountMin, tokenAddresses } = useMemo(() => {
     try {
       let transactionData = data;
       if (nestedTransactions?.length) {
@@ -70,20 +71,32 @@ export function useDappSwapComparisonInfo() {
           trxnData?.startsWith(FOUR_BYTE_EXECUTE_SWAP_CONTRACT),
         )?.data;
       }
-      const result = getDataFromSwap(chainId, transactionData);
+      const result = getDataFromSwap(
+        chainId,
+        transactionData,
+        txParams?.from as string,
+      );
       updateRequestDetectionLatency();
       return result;
     } catch (error) {
       captureException(error);
       return {
+        commands: '',
         quotesInput: undefined,
         amountMin: undefined,
         tokenAddresses: [],
       };
     }
-  }, [chainId, data, nestedTransactions, updateRequestDetectionLatency]);
+  }, [
+    chainId,
+    data,
+    nestedTransactions,
+    txParams?.from,
+    updateRequestDetectionLatency,
+  ]);
 
   const {
+    fiatRates,
     getGasUSDValue,
     getTokenUSDValue,
     getDestinationTokenUSDValue,
@@ -104,25 +117,26 @@ export function useDappSwapComparisonInfo() {
     captureDappSwapComparisonMetricsProperties({
       properties: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
-        dapp_swap_comparison: 'loading',
+        swap_dapp_comparison: 'loading',
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        swap_dapp_commands: commands,
       },
     });
 
-    const startTime = new Date().getTime();
     updateQuoteRequestLatency();
-
+    const startTime = new Date().getTime();
     const quotesList = await fetchQuotes(quotesInput);
-
     updateQuoteResponseLatency(startTime);
     return quotesList;
   }, [
+    commands,
     captureDappSwapComparisonMetricsProperties,
     quotesInput,
     requestDetectionLatency,
   ]);
 
   const { bestQuote, bestFilteredQuote: selectedQuote } = useMemo(() => {
-    if (!amountMin || !quotes?.length || tokenInfoPending) {
+    if (amountMin === undefined || !quotes?.length || tokenInfoPending) {
       return { bestQuote: undefined, bestFilteredQuote: undefined };
     }
 
@@ -143,7 +157,7 @@ export function useDappSwapComparisonInfo() {
   useEffect(() => {
     try {
       if (
-        !amountMin ||
+        amountMin === undefined ||
         !bestQuote ||
         !quotesInput ||
         !simulationData ||
@@ -185,7 +199,9 @@ export function useDappSwapComparisonInfo() {
       captureDappSwapComparisonMetricsProperties({
         properties: {
           // eslint-disable-next-line @typescript-eslint/naming-convention
-          dapp_swap_comparison: 'completed',
+          swap_dapp_comparison: 'completed',
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          swap_dapp_commands: commands,
           // eslint-disable-next-line @typescript-eslint/naming-convention
           swap_dapp_from_token_simulated_value_usd: getTokenUSDValue(
             srcTokenAmount,
@@ -255,6 +271,7 @@ export function useDappSwapComparisonInfo() {
     amountMin,
     bestQuote,
     captureDappSwapComparisonMetricsProperties,
+    commands,
     gas,
     gasLimitNoBuffer,
     gasUsed,
@@ -363,9 +380,13 @@ export function useDappSwapComparisonInfo() {
   ]);
 
   return {
-    selectedQuoteValueDifference,
-    gasDifference,
-    tokenAmountDifference,
+    fiatRates,
     destinationTokenSymbol,
+    gasDifference,
+    selectedQuote,
+    selectedQuoteValueDifference,
+    sourceTokenAmount: quotesInput?.srcTokenAmount,
+    tokenAmountDifference,
+    tokenDetails,
   };
 }
