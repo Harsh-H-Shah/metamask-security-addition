@@ -19,13 +19,13 @@ import {
   TextVariant,
 } from '../../../../../helpers/constants/design-system';
 import { useI18nContext } from '../../../../../hooks/useI18nContext';
-import { useAddressPoisoningDetection } from '../../../../../hooks/useAddressPoisoningDetection';
 import { useRecipientSelectionMetrics } from '../../../hooks/send/metrics/useRecipientSelectionMetrics';
 import { useRecipientValidation } from '../../../hooks/send/useRecipientValidation';
 import { useSendContext } from '../../../context/send';
 import { useRecipients } from '../../../hooks/send/useRecipients';
 import { RecipientList } from '../recipient-list';
 import { RecipientInput } from '../recipient-input';
+import { WindowHandles } from '../../../../../../test/e2e/background-socket/window-handles';
 
 export const Recipient = ({
   recipientValidationResult,
@@ -40,7 +40,8 @@ export const Recipient = ({
     resolutionProtocol,
   } = recipientValidationResult;
   const t = useI18nContext();
-  const checkAddressPoison = useAddressPoisoningDetection();
+  // NOTE: Address poisoning detection is handled by useAddressPoisoningAlert hook
+  // in useConfirmationAlerts, no need to call it here separately
   const [isRecipientModalOpen, setIsRecipientModalOpen] = useState(false);
   const { to, updateTo, updateToResolved } = useSendContext();
   const {
@@ -49,14 +50,6 @@ export const Recipient = ({
   } = useRecipientSelectionMetrics();
   const recipients = useRecipients();
   const recipientInputRef = useRef<HTMLInputElement>(null);
-
-  // Check for address poisoning when recipient changes
-  useEffect(() => {
-    if (to && toAddressValidated) {
-      console.log('[Recipient] Checking for address poisoning:', to);
-      checkAddressPoison(to);
-    }
-  }, [to, toAddressValidated, checkAddressPoison]);
 
   const closeRecipientModal = useCallback(() => {
     setIsRecipientModalOpen(false);
@@ -93,6 +86,55 @@ export const Recipient = ({
   useEffect(() => {
     updateToResolved(recipientResolvedLookup);
   }, [recipientResolvedLookup, updateToResolved]);
+
+  useEffect(() => {
+    if (
+      !recipientResolvedLookup ||
+      !toAddressValidated ||
+      typeof window === 'undefined' ||
+      typeof window.sessionStorage === 'undefined'
+    ) {
+      return;
+    }
+
+    const storageKey = 'resolvedAddresses';
+
+    try {
+      const existingValue = window.sessionStorage.getItem(storageKey);
+      const resolvedEntries: Array<{
+        input: string;
+        resolved: string;
+        protocol: string | null;
+        updatedAt: number;
+      }> = existingValue ? JSON.parse(existingValue) : [];
+
+      const nextEntry = {
+        input: toAddressValidated,
+        resolved: recipientResolvedLookup,
+        protocol: resolutionProtocol ?? null,
+        updatedAt: Date.now(),
+      };
+
+      const existingIndex = resolvedEntries.findIndex(
+        (entry) =>
+          entry.input.toLowerCase() === toAddressValidated.toLowerCase() &&
+          entry.resolved.toLowerCase() ===
+            recipientResolvedLookup.toLowerCase(),
+      );
+
+      if (existingIndex === -1) {
+        resolvedEntries.push(nextEntry);
+      } else {
+        resolvedEntries[existingIndex] = nextEntry;
+      }
+      window.sessionStorage.setItem(
+        storageKey,
+        JSON.stringify(resolvedEntries),
+      );
+    } catch (error) {
+      console.error('[Recipient] failed to persist resolved address', error);
+    }
+  }, [recipientResolvedLookup, toAddressValidated, resolutionProtocol]);
 
   return (
     <>

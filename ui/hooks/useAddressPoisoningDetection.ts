@@ -12,13 +12,30 @@ import type { MetamaskState } from '../ducks/address-poisoning';
  * @returns Function to check if recipient address is a potential poisoning attack
  */
 export function useAddressPoisoningDetection() {
-  const state = useSelector((rootState: any) => rootState) as MetamaskState;
+  // Select only specific state slices to prevent unnecessary re-renders
+  const transactions = useSelector(
+    (rootState: any) => rootState?.metamask?.transactions,
+  );
+  const internalAccounts = useSelector(
+    (rootState: any) => rootState?.metamask?.internalAccounts?.accounts,
+  );
+  const useAddressPoisoningDetect = useSelector(
+    (rootState: any) => rootState?.metamask?.useAddressPoisoningDetect,
+  );
 
   const checkAddressPoison = useCallback(
     (recipientAddress: string) => {
+      // Construct a minimal state object with only needed slices
+      const state: MetamaskState = {
+        metamask: {
+          transactions,
+          internalAccounts: { accounts: internalAccounts },
+          useAddressPoisoningDetect,
+        },
+      };
       return checkForAddressPoisoningWithState(recipientAddress, state);
     },
-    [state],
+    [transactions, internalAccounts, useAddressPoisoningDetect],
   );
 
   return checkAddressPoison;

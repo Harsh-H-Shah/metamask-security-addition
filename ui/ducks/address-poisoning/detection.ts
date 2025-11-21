@@ -1,9 +1,11 @@
 /**
  * Address Poisoning Detection System
  *
- * This module provides comprehensive detection of address poisoning attacks
- * where malicious actors send low-value transactions to users and then
- * trick them into sending funds to similar-looking addresses.
+ * Simplified version with straightforward checks:
+ * 1. Check if recipient is user's own address
+ * 2. Check if user has sent funds to recipient before
+ * 3. Check if recipient has sent funds to user (any value) - REQUIRED for warning
+ * 4. Check similarity with addresses user has sent funds to
  */
 
 // Type definitions
@@ -32,8 +34,6 @@ export interface AddressPoisoningWarning {
   message: string;
   details: {
     recipientAddress: string;
-    suspiciousAddress: string;
-    detectionMethod: string;
     txValue: string;
   };
   severity: string;
@@ -52,141 +52,105 @@ export interface MetamaskState {
 }
 
 /**
- * Calculate Levenshtein distance between two strings
+ * Count matching characters between two strings at the same positions
  */
-function levenshteinDistance(str1: string, str2: string): number {
-  const len1 = str1.length;
-  const len2 = str2.length;
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= len1; i++) {
-    matrix[i] = [i];
-  }
-  for (let j = 0; j <= len2; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= len1; i++) {
-    for (let j = 1; j <= len2; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1,
-        );
-      }
+function countMatchingChars(str1: string, str2: string): number {
+  let matches = 0;
+  const minLen = Math.min(str1.length, str2.length);
+  for (let i = 0; i < minLen; i++) {
+    if (str1[i] === str2[i]) {
+      matches++;
     }
   }
-
-  return matrix[len1][len2];
+  return matches;
 }
 
 /**
- * Calculate similarity ratio between two strings
+ * Check prefix similarity - returns number of matching characters
  */
-function calculateSimilarity(str1: string, str2: string): number {
-  const distance = levenshteinDistance(str1, str2);
-  const maxLength = Math.max(str1.length, str2.length);
-  return 1 - distance / maxLength;
-}
-
-/**
- * Check if two addresses are suspiciously similar
- */
-function areAddressesSimilar(
+function getPrefixMatchingChars(
   address1: string,
   address2: string,
-): SimilarityResult {
-  if (!address1 || !address2) {
-    return { isSimilar: false, method: null };
-  }
+  prefixLength: number = 10,
+): number {
+  const prefix1 = address1.slice(2, prefixLength);
+  const prefix2 = address2.slice(2, prefixLength);
+  return countMatchingChars(prefix1, prefix2);
+}
+
+/**
+ * Check suffix similarity - returns number of matching characters
+ */
+function getSuffixMatchingChars(
+  address1: string,
+  address2: string,
+  suffixLength: number = 10,
+): number {
+  const suffix1 = address1.slice(-suffixLength);
+  const suffix2 = address2.slice(-suffixLength);
+  return countMatchingChars(suffix1, suffix2);
+}
+
+/**
+ * Simplified similarity check with 3-3 prefix-suffix threshold
+ * and additional checks to catch any potential poisoning
+ */
+function areAddressesSimilar(address1: string, address2: string): boolean {
+  if (!address1 || !address2) return false;
 
   const addr1 = address1.toLowerCase();
   const addr2 = address2.toLowerCase();
 
-  if (addr1 === addr2) {
-    return { isSimilar: false, method: null };
+  if (addr1 === addr2) return false;
+
+  // Calculate similarity metrics
+  const prefixMatchCount = getPrefixMatchingChars(addr1, addr2, 10);
+  const suffixMatchCount = getSuffixMatchingChars(addr1, addr2, 10);
+
+  // Primary check: Exact 5-5 prefix-suffix match at same positions
+  const prefix5 = addr1.slice(0, 5) === addr2.slice(0, 5);
+  const suffix5 = addr1.slice(-5) === addr2.slice(-5);
+
+  // Debug logging
+  console.log('[Address Poisoning] Similarity check:', {
+    addr1: addr1,
+    addr2: addr2,
+    prefix5: prefix5,
+    suffix5: suffix5,
+    prefixMatchCount: prefixMatchCount,
+    suffixMatchCount: suffixMatchCount,
+    combined: prefixMatchCount + suffixMatchCount,
+  });
+
+  if (prefix5 && suffix5) {
+    console.log('[Address Poisoning] Match: exact 5-5 prefix-suffix');
+    return true;
   }
 
-  // Method 1: Exact prefix + suffix matching (most common attack)
-  const prefixSuffixTests = [
-    { prefix: 6, suffix: 4 },
-    { prefix: 8, suffix: 6 },
-    { prefix: 10, suffix: 4 },
-    { prefix: 6, suffix: 6 },
-  ];
-
-  for (const test of prefixSuffixTests) {
-    const prefix1 = addr1.slice(0, test.prefix);
-    const prefix2 = addr2.slice(0, test.prefix);
-    const suffix1 = addr1.slice(-test.suffix);
-    const suffix2 = addr2.slice(-test.suffix);
-    const middle1 = addr1.slice(test.prefix, -test.suffix);
-    const middle2 = addr2.slice(test.prefix, -test.suffix);
-
-    if (prefix1 === prefix2 && suffix1 === suffix2 && middle1 !== middle2) {
-      return {
-        isSimilar: true,
-        method: `prefix(${test.prefix})+suffix(${test.suffix})`,
-      };
-    }
+  // Combined prefix + suffix similarity
+  if (prefixMatchCount + suffixMatchCount >= 6) {
+    console.log('[Address Poisoning] Match: combined similarity >= 6');
+    return true;
   }
 
-  // Method 2: High similarity (85%+)
-  const similarity = calculateSimilarity(addr1, addr2);
-  if (similarity >= 0.85) {
-    return {
-      isSimilar: true,
-      method: `high-similarity(${(similarity * 100).toFixed(1)}%)`,
-    };
-  }
-
-  // Method 3: Prefix similarity (first 12 chars, 80%+)
-  const prefixSimilarity = calculateSimilarity(
-    addr1.slice(0, 12),
-    addr2.slice(0, 12),
-  );
-  if (prefixSimilarity >= 0.8) {
-    return {
-      isSimilar: true,
-      method: `prefix-similarity(${(prefixSimilarity * 100).toFixed(1)}%)`,
-    };
-  }
-
-  // Method 4: Suffix similarity (last 10 chars, 80%+)
-  const suffixSimilarity = calculateSimilarity(
-    addr1.slice(-10),
-    addr2.slice(-10),
-  );
-  if (suffixSimilarity >= 0.8) {
-    return {
-      isSimilar: true,
-      method: `suffix-similarity(${(suffixSimilarity * 100).toFixed(1)}%)`,
-    };
-  }
-
-  return { isSimilar: false, method: null };
+  console.log('[Address Poisoning] No similarity match');
+  return false;
 }
 
 /**
- * Check if an address is potentially part of an address poisoning attack
- * This is the internal function that performs the actual detection logic
+ * Simplified detection logic
  */
 function performDetection(
   recipientAddress: string,
   transactions: Transaction[],
   internalAccounts: InternalAccount[],
 ): AddressPoisoningWarning | null {
-  console.log('[Address Poisoning] Starting detection check...', {
+  console.log('[Address Poisoning] Starting simplified detection...', {
     recipientAddress,
     transactionCount: transactions?.length || 0,
-    accountCount: internalAccounts?.length || 0,
   });
 
   if (!recipientAddress) {
-    console.log('[Address Poisoning] No recipient address');
     return null;
   }
 
@@ -195,26 +159,18 @@ function performDetection(
     account.address.toLowerCase(),
   );
 
-  // Don't flag sending to own addresses
+  // STEP 1: Check if recipient is user's own address
   if (ownAddresses.includes(recipientLower)) {
-    console.log('[Address Poisoning] Sending to own address - safe');
+    console.log('[Address Poisoning] Recipient is own address - safe');
     return null;
   }
 
-  // Track addresses user has sent to
+  // Collect addresses user has sent to and addresses that sent to user
   const addressesSentTo = new Set<string>();
+  const addressesReceivedFrom = new Set<string>();
 
-  // Collect all addresses encountered in transactions
-  const addressesToCheck: Array<{
-    address: string;
-    value: number;
-    valueETH: string;
-    type: 'incoming' | 'outgoing';
-  }> = [];
-
-  // Analyze transactions to collect all addresses
   for (const tx of transactions) {
-    if (!tx.txParams) continue;
+    if (!tx.txParams || tx.status !== 'confirmed') continue;
 
     const { from, to, value } = tx.txParams;
     const fromLower = from?.toLowerCase();
@@ -222,89 +178,83 @@ function performDetection(
     const txValue = value ? parseInt(value, 16) : 0;
 
     // Track outgoing transactions (user sending TO someone)
-    if (ownAddresses.includes(fromLower || '') && toLower) {
+    if (fromLower && ownAddresses.includes(fromLower) && toLower) {
       addressesSentTo.add(toLower);
-      addressesToCheck.push({
-        address: toLower,
-        value: txValue,
-        valueETH: (txValue / 1e18).toFixed(6),
-        type: 'outgoing',
-      });
     }
 
-    // Track incoming transactions (someone sending FROM this address TO user)
-    if (ownAddresses.includes(toLower || '') && fromLower) {
-      addressesToCheck.push({
-        address: fromLower,
-        value: txValue,
-        valueETH: (txValue / 1e18).toFixed(6),
-        type: 'incoming',
-      });
+    // Track incoming transactions (someone sending TO user)
+    if (toLower && ownAddresses.includes(toLower) && fromLower) {
+      addressesReceivedFrom.add(fromLower);
     }
   }
 
-  console.log('[Address Poisoning] Initial Analysis:', {
-    totalAddressesChecked: addressesToCheck.length,
-    addressesSentTo: addressesSentTo.size,
-    recipient:
-      recipientAddress.slice(0, 10) + '...' + recipientAddress.slice(-8),
+  console.log('[Address Poisoning] Analysis results:', {
+    addressesSentTo: Array.from(addressesSentTo),
+    addressesReceivedFrom: Array.from(addressesReceivedFrom),
   });
 
-  // Check each address in transaction history for similarity with recipient
-  const similarAddresses: Array<{
-    address: string;
-    type: 'incoming' | 'outgoing';
-    value: number;
-    valueETH: string;
-    method: string;
-  }> = [];
-
-  for (const txAddress of addressesToCheck) {
-    const similarityResult = areAddressesSimilar(
-      recipientAddress,
-      txAddress.address,
+  // STEP 2: Check if user has sent funds to this address before
+  if (addressesSentTo.has(recipientLower)) {
+    console.log(
+      '[Address Poisoning] User has sent to this address before - safe',
     );
+    return null;
+  }
 
-    if (similarityResult.isSimilar) {
-      console.log('[Address Poisoning] ✓ SIMILAR ADDRESS FOUND!', {
-        recipient: recipientAddress,
-        similarAddress: txAddress.address,
-        type: txAddress.type,
-        method: similarityResult.method,
-        value: txAddress.valueETH + ' ETH',
-      });
+  // STEP 3: Check if this address has sent funds to user (any value)
+  // THIS IS NOW REQUIRED - No warning if recipient never sent to user
+  const hasReceivedFromRecipient = addressesReceivedFrom.has(recipientLower);
 
-      similarAddresses.push({
-        address: txAddress.address,
-        type: txAddress.type,
-        value: txAddress.value,
-        valueETH: txAddress.valueETH,
-        method: similarityResult.method || 'unknown',
+  if (!hasReceivedFromRecipient) {
+    console.log(
+      '[Address Poisoning] Recipient has never sent funds to user - no warning needed',
+    );
+    return null;
+  }
+
+  console.log(
+    '[Address Poisoning] Recipient has sent funds to user before - checking for similarity with addresses sent to',
+    {
+      recipient: recipientLower,
+      addressesToCheck: Array.from(addressesSentTo),
+    },
+  );
+
+  // STEP 4: Check similarity with addresses user has sent funds to
+  let foundSimilarAddress = false;
+  let similarAddressFound = '';
+
+  for (const sentToAddress of addressesSentTo) {
+    const similarityResult = areAddressesSimilar(recipientLower, sentToAddress);
+
+    if (similarityResult) {
+      console.log('[Address Poisoning] Similar address found:', {
+        recipient: recipientLower,
+        similarTo: sentToAddress,
       });
+      foundSimilarAddress = true;
+      similarAddressFound = sentToAddress;
+      break; // Found one similar address, no need to check others
     }
   }
 
-  // Log all found similar addresses
-  if (similarAddresses.length > 0) {
-    console.log('[Address Poisoning] Similar addresses found:', {
-      count: similarAddresses.length,
-      addresses: similarAddresses.map((addr) => ({
-        address: addr.address,
-        type: addr.type,
-        valueETH: addr.valueETH,
-        method: addr.method,
-      })),
-    });
+  // Generate warning if similar address found
+  if (foundSimilarAddress) {
+    console.log('[Address Poisoning] ⚠️ POTENTIAL ADDRESS POISONING DETECTED!');
+
+    return {
+      warning: true,
+      title: '⚠️ Possible Address Poisoning',
+      message: `The address you're sending to (${recipientAddress.slice(0, 8)}...${recipientAddress.slice(-6)}) looks very similar to an address you've sent funds to before (${similarAddressFound.slice(0, 8)}...${similarAddressFound.slice(-6)}). This could be an address poisoning attack. Please verify the full address carefully.`,
+      details: {
+        recipientAddress,
+        txValue: 'Unknown',
+      },
+      severity: 'high',
+    };
   }
 
-  // Future: Determine if we should display warning based on the similar addresses found
-  // For now, just log all similar addresses for debugging
-  if (similarAddresses.length === 0) {
-    console.log(
-      '[Address Poisoning] ✅ No similar addresses detected - recipient address appears safe',
-    );
-  }
-
+  console.log('[Address Poisoning] ✅ No address poisoning detected');
   return null;
 }
 
@@ -355,7 +305,7 @@ export function checkForAddressPoisoningWithState(
     accountCount: internalAccounts.length,
   });
 
-  // Perform the actual detection
+  // Perform the simplified detection
   return performDetection(recipientAddress, transactions, internalAccounts);
 }
 

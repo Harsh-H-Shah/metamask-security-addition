@@ -4,6 +4,7 @@ import useAccountMismatchAlerts from './alerts/signatures/useAccountMismatchAler
 import useDomainMismatchAlerts from './alerts/signatures/useDomainMismatchAlerts';
 import { useAccountTypeUpgrade } from './alerts/transactions/useAccountTypeUpgrade';
 import { useFirstTimeInteractionAlert } from './alerts/transactions/useFirstTimeInteractionAlert';
+import { useAddressPoisoningAlert } from './alerts/transactions/useAddressPoisoningAlert';
 import { useGasEstimateFailedAlerts } from './alerts/transactions/useGasEstimateFailedAlerts';
 import { useGasFeeLowAlerts } from './alerts/transactions/useGasFeeLowAlerts';
 import { useGasTooLowAlerts } from './alerts/transactions/useGasTooLowAlerts';
@@ -40,6 +41,7 @@ function useTransactionAlerts(): Alert[] {
   const accountTypeUpgradeAlerts = useAccountTypeUpgrade();
   const burnAddressAlert = useBurnAddressAlert();
   const firstTimeInteractionAlert = useFirstTimeInteractionAlert();
+  const addressPoisoningAlert = useAddressPoisoningAlert();
   const gasEstimateFailedAlerts = useGasEstimateFailedAlerts();
   const gasFeeLowAlerts = useGasFeeLowAlerts();
   const gasTooLowAlerts = useGasTooLowAlerts();
@@ -58,6 +60,7 @@ function useTransactionAlerts(): Alert[] {
       ...accountTypeUpgradeAlerts,
       ...burnAddressAlert,
       ...firstTimeInteractionAlert,
+      ...addressPoisoningAlert,
       ...gasEstimateFailedAlerts,
       ...gasFeeLowAlerts,
       ...gasTooLowAlerts,
@@ -75,6 +78,7 @@ function useTransactionAlerts(): Alert[] {
       accountTypeUpgradeAlerts,
       burnAddressAlert,
       firstTimeInteractionAlert,
+      addressPoisoningAlert,
       gasEstimateFailedAlerts,
       gasFeeLowAlerts,
       gasTooLowAlerts,
