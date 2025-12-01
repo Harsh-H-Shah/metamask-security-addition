@@ -12,6 +12,11 @@ import { updateAndApproveTx } from '../../../../store/actions';
 import { useIsGaslessSupported } from '../gas/useIsGaslessSupported';
 import { useGaslessSupportedSmartTransactions } from '../gas/useGaslessSupportedSmartTransactions';
 import { useShieldConfirm } from './useShieldConfirm';
+import {
+  getDomainResolutions,
+  saveDomainResolution,
+} from '../../../../ducks/domains';
+import { getCurrentChainId } from '../../../../../shared/modules/selectors/networks';
 
 export function useTransactionConfirm() {
   const dispatch = useDispatch();
@@ -23,6 +28,9 @@ export function useTransactionConfirm() {
   const { isSupported: isGaslessSupportedSTX } =
     useGaslessSupportedSmartTransactions();
   const { isSupported: isGaslessSupported } = useIsGaslessSupported();
+
+  const domainResolutions = useSelector(getDomainResolutions);
+  const chainId = useSelector(getCurrentChainId);
 
   const newTransactionMeta = useMemo(
     () => cloneDeep(transactionMeta),
@@ -93,6 +101,27 @@ export function useTransactionConfirm() {
     handleShieldSubscriptionApprovalTransactionAfterConfirm(newTransactionMeta);
     try {
       await dispatch(updateAndApproveTx(newTransactionMeta, true, ''));
+
+      // After successful transaction, save domain resolution to storage for typosquatting detection
+      if (domainResolutions && domainResolutions.length > 0) {
+        const primaryResolution = domainResolutions[0];
+        if (primaryResolution.resolvedAddress && transactionMeta.txParams?.to) {
+          const resolvedAddress =
+            primaryResolution.resolvedAddress.toLowerCase();
+          const txTo = transactionMeta.txParams.to.toLowerCase();
+
+          // Only save if the resolved address matches the transaction recipient
+          if (resolvedAddress === txTo) {
+            const domainName =
+              primaryResolution.domainName || primaryResolution.domain;
+            if (domainName) {
+              dispatch(
+                saveDomainResolution(domainName, resolvedAddress, chainId),
+              );
+            }
+          }
+        }
+      }
     } catch (error) {
       handleShieldSubscriptionApprovalTransactionAfterConfirmErr(
         newTransactionMeta,
@@ -109,6 +138,9 @@ export function useTransactionConfirm() {
     selectedGasFeeToken,
     handleShieldSubscriptionApprovalTransactionAfterConfirm,
     handleShieldSubscriptionApprovalTransactionAfterConfirmErr,
+    domainResolutions,
+    transactionMeta,
+    chainId,
   ]);
 
   return {

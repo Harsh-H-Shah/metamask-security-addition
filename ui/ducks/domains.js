@@ -16,6 +16,15 @@ import { handleSnapRequest } from '../store/actions';
 import { NO_RESOLUTION_FOR_DOMAIN } from '../pages/confirmations/send-legacy/send.constants';
 import { CHAIN_CHANGED } from '../store/actionConstants';
 import { BURN_ADDRESS } from '../../shared/modules/hexstring-utils';
+import {
+  checkForTyposquatting,
+  checkForDomainDropCatching,
+} from './domains/typosquatting';
+import {
+  getResolvedDomainsFromStorage,
+  saveResolvedDomainToStorage,
+  getPreviouslyResolvedAddress,
+} from './domains/storage';
 
 // Local Constants
 const ZERO_X_ERROR_ADDRESS = '0x';
@@ -27,6 +36,8 @@ const initialState = {
   warning: null,
   chainId: null,
   domainName: null,
+  typosquattingWarning: null,
+  domainDropCatchingWarning: null,
 };
 
 export const domainInitialState = initialState;
@@ -41,6 +52,8 @@ const slice = createSlice({
       state.domainName = action.payload;
       state.warning = 'loading';
       state.error = null;
+      state.typosquattingWarning = null;
+      state.domainDropCatchingWarning = null;
     },
     lookupEnd: (state, action) => {
       // first clear out the previous state
@@ -48,7 +61,14 @@ const slice = createSlice({
       state.error = null;
       state.warning = null;
       state.domainName = null;
-      const { resolutions, domainName } = action.payload;
+      state.typosquattingWarning = null;
+      state.domainDropCatchingWarning = null;
+      const {
+        resolutions,
+        domainName,
+        typosquattingWarning,
+        domainDropCatchingWarning,
+      } = action.payload;
       const filteredResolutions = resolutions.filter((resolution) => {
         return (
           resolution.resolvedAddress !== BURN_ADDRESS &&
@@ -57,6 +77,8 @@ const slice = createSlice({
       });
       if (filteredResolutions.length > 0) {
         state.resolutions = filteredResolutions;
+        state.typosquattingWarning = typosquattingWarning;
+        state.domainDropCatchingWarning = domainDropCatchingWarning;
       } else if (domainName.length > 0) {
         state.error = NO_RESOLUTION_FOR_DOMAIN;
       }
@@ -66,12 +88,16 @@ const slice = createSlice({
       state.error = null;
       state.resolutions = null;
       state.warning = null;
+      state.typosquattingWarning = null;
+      state.domainDropCatchingWarning = null;
       state.chainId = action.payload;
     },
     resetDomainResolution: (state) => {
       state.resolutions = null;
       state.warning = null;
       state.error = null;
+      state.typosquattingWarning = null;
+      state.domainDropCatchingWarning = null;
     },
   },
   extraReducers: (builder) => {
@@ -194,6 +220,75 @@ export function lookupDomainName(domainName, chainId) {
       state,
     });
 
+    // Check for typosquatting
+    let typosquattingWarning = null;
+    try {
+      const resolvedDomains = await getResolvedDomainsFromStorage();
+      log.info(
+        `[Typosquatting] Checking domain: ${trimmedDomainName} against ${Object.keys(resolvedDomains).length} known domains`,
+      );
+      const typoCheck = checkForTyposquatting(
+        trimmedDomainName,
+        resolvedDomains,
+      );
+      if (typoCheck) {
+        typosquattingWarning = typoCheck;
+        log.warn(
+          `[Typosquatting] ALERT TRIGGERED - Potential typosquatting detected for domain: ${trimmedDomainName}`,
+          typoCheck,
+        );
+      } else {
+        log.info(
+          `[Typosquatting] No similar domains found for: ${trimmedDomainName}`,
+        );
+      }
+    } catch (error) {
+      log.error('[Typosquatting] Error during check:', error);
+    }
+
+    // Check for domain drop catching attack
+    let domainDropCatchingWarning = null;
+    if (resolutions && resolutions.length > 0) {
+      try {
+        const currentAddress = resolutions[0].resolvedAddress;
+        const previousAddress = await getPreviouslyResolvedAddress(
+          trimmedDomainName,
+        );
+
+        log.info(
+          `[Domain Drop Catching] Checking domain: ${trimmedDomainName}, currentAddress: ${currentAddress}, previousAddress: ${previousAddress}`,
+        );
+
+        if (previousAddress && currentAddress) {
+          log.info(
+            `[Domain Drop Catching] Calling checkForDomainDropCatching for: ${trimmedDomainName}`,
+          );
+          const dropCheck = checkForDomainDropCatching(
+            trimmedDomainName,
+            currentAddress,
+            previousAddress,
+          );
+          if (dropCheck) {
+            domainDropCatchingWarning = dropCheck;
+            log.warn(
+              `[Domain Drop Catching] ALERT TRIGGERED - Domain resolution changed for: ${trimmedDomainName}`,
+              dropCheck,
+            );
+          } else {
+            log.info(
+              `[Domain Drop Catching] No change detected - addresses match for: ${trimmedDomainName}`,
+            );
+          }
+        } else {
+          log.info(
+            `[Domain Drop Catching] Skipping check - previousAddress is null for: ${trimmedDomainName}`,
+          );
+        }
+      } catch (error) {
+        log.error('[Domain Drop Catching] Error during check:', error);
+      }
+    }
+
     // Due to the asynchronous nature of looking up domains, we could reach this point
     // while a new lookup has started, if so we don't use the found result.
     state = getState();
@@ -207,6 +302,8 @@ export function lookupDomainName(domainName, chainId) {
         chainId,
         network: chainIdInt,
         domainName: trimmedDomainName,
+        typosquattingWarning,
+        domainDropCatchingWarning,
       }),
     );
   };
@@ -222,4 +319,27 @@ export function getDomainError(state) {
 
 export function getDomainWarning(state) {
   return state[name].warning;
+}
+
+export function getTyposquattingWarning(state) {
+  return state[name].typosquattingWarning;
+}
+
+export function getDomainDropCatchingWarning(state) {
+  return state[name].domainDropCatchingWarning;
+}
+
+/**
+ * Save a successfully resolved domain to storage
+ * Call this after a transaction is confirmed
+ */
+export function saveDomainResolution(domain, address, chainId) {
+  return async () => {
+    try {
+      await saveResolvedDomainToStorage(domain, address, chainId);
+      log.info(`Saved domain resolution to storage: ${domain} -> ${address}`);
+    } catch (error) {
+      log.error('Error saving domain resolution:', error);
+    }
+  };
 }

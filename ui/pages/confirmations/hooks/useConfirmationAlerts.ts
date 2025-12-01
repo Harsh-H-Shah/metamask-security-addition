@@ -14,6 +14,8 @@ import { useNonContractAddressAlerts } from './alerts/transactions/useNonContrac
 import { usePendingTransactionAlerts } from './alerts/transactions/usePendingTransactionAlerts';
 import { useResimulationAlert } from './alerts/transactions/useResimulationAlert';
 import { useSigningOrSubmittingAlerts } from './alerts/transactions/useSigningOrSubmittingAlerts';
+import { useTyposquattingAlert } from './alerts/transactions/useTyposquattingAlert';
+import { useDomainDropCatchingAlert } from './alerts/transactions/useDomainDropCatchingAlert';
 import useBlockaidAlerts from './alerts/useBlockaidAlerts';
 import useConfirmationOriginAlerts from './alerts/useConfirmationOriginAlerts';
 import { useNetworkAndOriginSwitchingAlerts } from './alerts/useNetworkAndOriginSwitchingAlerts';
@@ -50,6 +52,8 @@ function useTransactionAlerts(): Alert[] {
   const shieldCoverageAlert = useShieldCoverageAlert();
   const signingOrSubmittingAlerts = useSigningOrSubmittingAlerts();
   const tokenTrustSignalAlerts = useTokenTrustSignalAlerts();
+  const typosquattingAlert = useTyposquattingAlert();
+  const domainDropCatchingAlert = useDomainDropCatchingAlert();
 
   return useMemo(
     () => [
@@ -67,6 +71,8 @@ function useTransactionAlerts(): Alert[] {
       ...shieldCoverageAlert,
       ...signingOrSubmittingAlerts,
       ...tokenTrustSignalAlerts,
+      ...typosquattingAlert,
+      ...domainDropCatchingAlert,
     ],
     [
       accountTypeUpgradeAlerts,
@@ -83,6 +89,8 @@ function useTransactionAlerts(): Alert[] {
       shieldCoverageAlert,
       signingOrSubmittingAlerts,
       tokenTrustSignalAlerts,
+      typosquattingAlert,
+      domainDropCatchingAlert,
     ],
   );
 }
