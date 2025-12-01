@@ -6,6 +6,7 @@ import {
   MockAnyNamespace,
 } from '@metamask/messenger';
 import {
+  PAYMENT_TYPES,
   PRODUCT_TYPES,
   RECURRING_INTERVALS,
 } from '@metamask/subscription-controller';
@@ -60,6 +61,10 @@ const mockStartShieldSubscriptionWithCard = jest.fn();
 const mockGetSubscriptions = jest.fn();
 const mockGetSwapsControllerState = jest.fn();
 const mockGetNetworkControllerState = jest.fn();
+const mockGetAppStateControllerState = jest.fn();
+const mockGetMetaMetricsControllerState = jest.fn();
+const mockGetSubscriptionControllerState = jest.fn();
+const mockGetKeyringControllerState = jest.fn();
 
 const rootMessenger: RootMessenger = new Messenger({
   namespace: MOCK_ANY_NAMESPACE,
@@ -100,6 +105,22 @@ rootMessenger.registerActionHandler(
   'NetworkController:getState',
   mockGetNetworkControllerState,
 );
+rootMessenger.registerActionHandler(
+  'AppStateController:getState',
+  mockGetAppStateControllerState,
+);
+rootMessenger.registerActionHandler(
+  'MetaMetricsController:trackEvent',
+  mockGetMetaMetricsControllerState,
+);
+rootMessenger.registerActionHandler(
+  'SubscriptionController:getState',
+  mockGetSubscriptionControllerState,
+);
+rootMessenger.registerActionHandler(
+  'KeyringController:getState',
+  mockGetKeyringControllerState,
+);
 
 const messenger: SubscriptionServiceMessenger = new Messenger({
   namespace: 'SubscriptionService',
@@ -117,6 +138,10 @@ rootMessenger.delegate({
     'SmartTransactionsController:getState',
     'SwapsController:getState',
     'NetworkController:getState',
+    'AppStateController:getState',
+    'MetaMetricsController:trackEvent',
+    'SubscriptionController:getState',
+    'KeyringController:getState',
   ],
 });
 
@@ -132,42 +157,74 @@ const subscriptionService = new SubscriptionService({
   platform: mockPlatform,
   webAuthenticator: mockWebAuthenticator,
 });
+// Mock environment variables
+const originalEnv = process.env;
 
 describe('SubscriptionService - startSubscriptionWithCard', () => {
+  const MOCK_STATE = createSwapsMockStore().metamask;
+
   beforeAll(() => {
     process.env.METAMASK_ENVIRONMENT = ENVIRONMENT.TESTING;
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+  beforeEach(() => {
+    process.env = { ...originalEnv };
 
-  it('should start the subscription with card', async () => {
     mockStartShieldSubscriptionWithCard.mockResolvedValue({
       checkoutSessionUrl: mockCheckoutSessionUrl,
     });
-    const mockOpenTab = jest.spyOn(mockPlatform, 'openTab');
-    mockOpenTab.mockResolvedValue({
+    mockGetAppStateControllerState.mockReturnValue({
+      defaultSubscriptionPaymentOptions: {
+        defaultBillingInterval: RECURRING_INTERVALS.month,
+        defaultPaymentType: PAYMENT_TYPES.byCard,
+        defaultPaymentCurrency: 'usd',
+        defaultPaymentChain: '0x1',
+      },
+    });
+    mockGetSubscriptionControllerState.mockReturnValue({
+      lastSelectedPaymentMethod: {
+        shield: {
+          plan: RECURRING_INTERVALS.year,
+          type: PAYMENT_TYPES.byCard,
+        },
+      },
+      trialedProducts: [],
+      subscriptions: [],
+      lastSubscription: undefined,
+    });
+    mockGetAccountsState.mockReturnValueOnce({
+      internalAccounts: MOCK_STATE.internalAccounts,
+    });
+    mockGetKeyringControllerState.mockReturnValueOnce({
+      keyrings: MOCK_STATE.keyrings,
+    });
+
+    jest.spyOn(mockPlatform, 'openTab').mockResolvedValue({
       id: 1,
     } as browser.Tabs.Tab);
-    const mockAddTabUpdatedListener = jest.spyOn(
-      mockPlatform,
-      'addTabUpdatedListener',
-    );
-    mockAddTabUpdatedListener.mockImplementation(async (fn) => {
-      await new Promise((r) => setTimeout(r, 200));
-      await fn(1, {
-        url: MOCK_REDIRECT_URI,
+    jest
+      .spyOn(mockPlatform, 'addTabUpdatedListener')
+      .mockImplementation(async (fn) => {
+        await new Promise((r) => setTimeout(r, 200));
+        await fn(1, {
+          url: MOCK_REDIRECT_URI,
+        });
       });
-    });
-    const mockAddTabRemovedListener = jest.spyOn(
-      mockPlatform,
-      'addTabRemovedListener',
-    );
-    mockAddTabRemovedListener.mockImplementation(async (fn) => {
-      await new Promise((r) => setTimeout(r, 500));
-      await fn(1);
-    });
+    jest
+      .spyOn(mockPlatform, 'addTabRemovedListener')
+      .mockImplementation(async (fn) => {
+        await new Promise((r) => setTimeout(r, 500));
+        await fn(1);
+      });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  it('should start the subscription with card', async () => {
+    delete process.env.IN_TEST; // unset IN_TEST environment variable
 
     await subscriptionService.startSubscriptionWithCard({
       products: [PRODUCT_TYPES.SHIELD],
